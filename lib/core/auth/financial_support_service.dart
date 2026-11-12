@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -93,6 +94,53 @@ class FinancialSupportService {
       _token = null;
     }
   }
+
+  String commandId() {
+    final b = List<int>.generate(16, (_) => Random.secure().nextInt(256));
+    b[6] = (b[6] & 15) | 64;
+    b[8] = (b[8] & 63) | 128;
+    final h = b.map((v) => v.toRadixString(16).padLeft(2, '0')).join();
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+  }
+
+  String get supportBase {
+    if (!financialBaseUrl.endsWith('/financial-support')) {
+      throw const FinancialSupportFailure('SECURE_CONFIGURATION_REQUIRED');
+    }
+    return financialBaseUrl.replaceFirst(
+        RegExp(r'/financial-support$'), '/subscription-support');
+  }
+
+  Future<Map<String, dynamic>> tickets(int business,
+          {String? status, String? cursor}) =>
+      _request(
+          supportBase,
+          '/business/$business/tickets?${[
+            if (status != null) 'status=${Uri.encodeQueryComponent(status)}',
+            if (cursor != null) 'cursor=${Uri.encodeQueryComponent(cursor)}'
+          ].join('&')}');
+  Future<
+      Map<String,
+          dynamic>> ticket(int business, String id, {int? after}) => _request(
+      supportBase,
+      '/business/$business/tickets/${Uri.encodeComponent(id)}${after == null ? '' : '?after=$after'}');
+  Future<Map<String, dynamic>> ticketAction(
+          int business, String id, Map<String, dynamic> body) =>
+      _request(supportBase,
+          '/business/$business/tickets/${Uri.encodeComponent(id)}/actions',
+          body: body);
+  Future<Map<String, dynamic>> ticketFinancial(int business, String id,
+          {bool reconcile = false}) =>
+      _request(supportBase,
+          '/business/$business/tickets/${Uri.encodeComponent(id)}/financial',
+          body: {'operation': reconcile ? 'RECONCILE' : 'DETAIL'});
+  Future<Map<String, dynamic>> accessView(String kind, int business,
+          {int? target, String? cursor}) =>
+      _request(companyBaseUrl,
+          '/access/$kind?scopeKey=BUSINESS:$business${target == null ? '' : '&targetEmployeeId=$target'}${cursor == null ? '' : '&cursor=${Uri.encodeQueryComponent(cursor)}'}');
+  Future<Map<String, dynamic>> accessMutation(
+          String kind, Map<String, dynamic> body) =>
+      _request(companyBaseUrl, '/access/$kind', body: body);
 
   void close() {
     _token = null;

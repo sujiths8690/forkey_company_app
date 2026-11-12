@@ -1,10 +1,15 @@
+import 'support_tickets_screen.dart';
+import 'governed_access_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../core/auth/financial_support_service.dart';
 
 class FinancialSupportScreen extends StatefulWidget {
   final FinancialSupportService? service;
-  const FinancialSupportScreen({super.key, this.service});
+  final int? ticketBusinessId;
+  final String? ticketId;
+  const FinancialSupportScreen(
+      {super.key, this.service, this.ticketBusinessId, this.ticketId});
   @override
   State<FinancialSupportScreen> createState() => _FinancialSupportScreenState();
 }
@@ -25,6 +30,10 @@ class _FinancialSupportScreenState extends State<FinancialSupportScreen> {
   void initState() {
     super.initState();
     _service = widget.service;
+    if (widget.ticketId != null) {
+      _selectedBusiness = widget.ticketBusinessId;
+      Future.microtask(() => _inspect(widget.ticketId!));
+    }
     if (_service == null) {
       final company = dotenv.env['COMPANY_SESSION_BASE_URL'],
           financial = dotenv.env['FINANCIAL_SUPPORT_BASE_URL'];
@@ -41,7 +50,9 @@ class _FinancialSupportScreenState extends State<FinancialSupportScreen> {
 
   @override
   void dispose() {
-    _service?.close();
+    if (widget.service == null) {
+      _service?.close();
+    }
     _email.dispose();
     _password.dispose();
     _business.dispose();
@@ -93,7 +104,9 @@ class _FinancialSupportScreenState extends State<FinancialSupportScreen> {
       if (mounted) {
         setState(() {
           _error = _message(e);
-          if (!_service!.signedIn) {
+          if (!_service!.signedIn ||
+              e is FinancialSupportFailure &&
+                  e.code == 'COMPANY_PERMISSION_REQUIRED') {
             _clearSessionData();
           }
         });
@@ -112,46 +125,52 @@ class _FinancialSupportScreenState extends State<FinancialSupportScreen> {
           }
         }
       });
-  Future<void> _load({bool more = false}) => _run(() async {
-        final id =
-            more ? _selectedBusiness : int.tryParse(_business.text.trim());
-        if (id == null || id < 1 || id > 2147483647) {
-          setState(() => _error = 'Enter an authorized business ID.');
-          return;
-        }
-        if (!more) {
-          setState(() {
-            _items = [];
-            _detail = null;
-            _audit = null;
-            if (_selectedBusiness != null && _selectedBusiness != id) {
-              _case.clear();
-            }
-            _selectedBusiness = id;
-            _cursor = null;
-            _attempt = null;
-          });
-        }
-        final page = await _service!.history(id,
-            cursor: more ? _cursor : null, caseReference: _case.text.trim());
-        if (mounted) {
-          setState(() {
-            _items = [
-              if (more) ..._items,
-              ...(page['items'] as List)
-                  .map((e) => Map<String, dynamic>.from(e))
-            ];
-            _cursor = page['nextCursor'];
-            _attempt = page['attemptId'];
-          });
-        }
-      });
+  Future<void> _load({bool more = false}) => widget.ticketId != null
+      ? _inspect(widget.ticketId!)
+      : _run(() async {
+          final id =
+              more ? _selectedBusiness : int.tryParse(_business.text.trim());
+          if (id == null || id < 1 || id > 2147483647) {
+            setState(() => _error = 'Enter an authorized business ID.');
+            return;
+          }
+          if (!more) {
+            setState(() {
+              _items = [];
+              _detail = null;
+              _audit = null;
+              if (_selectedBusiness != null && _selectedBusiness != id) {
+                _case.clear();
+              }
+              _selectedBusiness = id;
+              _cursor = null;
+              _attempt = null;
+            });
+          }
+          final page = await _service!.history(id,
+              cursor: more ? _cursor : null, caseReference: _case.text.trim());
+          if (mounted) {
+            setState(() {
+              _items = [
+                if (more) ..._items,
+                ...(page['items'] as List)
+                    .map((e) => Map<String, dynamic>.from(e))
+              ];
+              _cursor = page['nextCursor'];
+              _attempt = page['attemptId'];
+            });
+          }
+        });
   Future<void> _inspect(String id, {bool reconcile = false}) => _run(() async {
-        final result = reconcile
-            ? await _service!
-                .reconcile(_selectedBusiness!, id, _case.text.trim())
-            : await _service!.detail(_selectedBusiness!, id,
-                caseReference: _case.text.trim());
+        final result = widget.ticketId != null
+            ? await _service!.ticketFinancial(
+                widget.ticketBusinessId!, widget.ticketId!,
+                reconcile: reconcile)
+            : reconcile
+                ? await _service!
+                    .reconcile(_selectedBusiness!, id, _case.text.trim())
+                : await _service!.detail(_selectedBusiness!, id,
+                    caseReference: _case.text.trim());
         if (mounted) {
           setState(() {
             _detail = result;
@@ -275,6 +294,7 @@ class _FinancialSupportScreenState extends State<FinancialSupportScreen> {
                             width: 240,
                             child: TextField(
                                 controller: _business,
+                                readOnly: widget.ticketId != null,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
                                     labelText: 'Authorized business ID'))),
@@ -296,6 +316,42 @@ class _FinancialSupportScreenState extends State<FinancialSupportScreen> {
                                     }),
                             child: const Text('View business support audit'))
                       ]),
+                  Wrap(spacing: 12, children: [
+                    TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                await Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                        builder: (_) => SupportTicketsScreen(
+                                            service: _service!)));
+                                if (mounted) {
+                                  setState(() {
+                                    if (!_service!.signedIn) {
+                                      _clearSessionData();
+                                    }
+                                  });
+                                }
+                              },
+                        child: const Text('Subscription support inbox')),
+                    TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                await Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                        builder: (_) => GovernedAccessScreen(
+                                            service: _service!)));
+                                if (mounted) {
+                                  setState(() {
+                                    if (!_service!.signedIn) {
+                                      _clearSessionData();
+                                    }
+                                  });
+                                }
+                              },
+                        child: const Text('Governed financial access'))
+                  ]),
                   Text('Selected business: ${_selectedBusiness ?? 'none'}'),
                   TextField(
                       controller: _case,
