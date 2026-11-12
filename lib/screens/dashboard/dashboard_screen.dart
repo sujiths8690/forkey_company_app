@@ -1,3 +1,4 @@
+import '../support/financial_support_screen.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -928,6 +929,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                   ],
                 ),
+                const SizedBox(height: 14),
+                Card(child: ListTile(leading: const Icon(Icons.account_balance_outlined), title: const Text('Subscription financial support'), subtitle: const Text('Business-scoped payment investigation and audited reconciliation'), trailing: const Icon(Icons.chevron_right), onTap: () => _navigate(context, const FinancialSupportScreen()))),
                 const SizedBox(height: 14),
                 // Stat Cards Grid Row 2
                 Row(
