@@ -20,6 +20,7 @@ import '../../screens/devices/devices_screen.dart';
 import '../../screens/income/income_screen.dart';
 import '../../screens/errors/errors_screen.dart';
 import '../../screens/notifications/notifications_screen.dart';
+import '../../screens/commercial/commercial_management_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../widgets/common/common_widgets.dart';
 import '../../widgets/dashboard/stat_card.dart';
@@ -1020,8 +1021,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                               AppColors.accent
                             ],
                             icon: Icons.workspace_premium_rounded,
-                            onTap: () =>
-                                _navigate(context, const _PlansAdminScreen()),
+                            onTap: () => _navigate(
+                              context,
+                              const CommercialManagementScreen(),
+                            ),
                           ),
                         ),
                       ),

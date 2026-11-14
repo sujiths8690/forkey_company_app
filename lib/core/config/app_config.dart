@@ -51,4 +51,18 @@ class AppConfig {
     final uri = Uri.parse(errorBaseUrl);
     return uri.replace(port: 4003, path: '').toString().replaceFirst(RegExp(r'/$'), '');
   }
+
+  static String get orderBaseUrl {
+    final value = dotenv.env['ORDER_BASE_URL']?.trim();
+    if (value != null && value.isNotEmpty) {
+      return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
+    }
+    // The approved gateway exposes Order and Content on the same HTTPS origin.
+    // Derive only the origin; never guess a host or forward credentials.
+    final content = Uri.parse(contentDeviceBaseUrl);
+    if (content.scheme != 'https' || content.host.isEmpty) {
+      throw StateError('ORDER_BASE_URL is missing from .env');
+    }
+    return content.replace(path: '', query: null, fragment: null).toString().replaceFirst(RegExp(r'/$'), '');
+  }
 }
